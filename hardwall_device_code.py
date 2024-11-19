@@ -5,55 +5,54 @@ import asyncio
 import websockets
 import json
 import paramiko
-from scp import SCPClient
 import time
+from scp import SCPClient
+
+BACKEND_URI = "ws://130.225.37.50:3000"
+HEADERS = {"x-device-type": "Pi"}
+MOUNT_POINT = "/mnt/usb"
+SERVER_IP = "130.225.37.50"
+SSH_PORT = 22
+SSH_USERNAME = "ubuntu"
+KEY_FILE_PATH = "/home/guest/hardwall_device/cloud.key"
+REMOTE_DIR = "/home/ubuntu/box"
 
 
 def get_device_info(device):
-    """Get USB device information and check if it is a mass storage device."""
+    """Get USB device information."""
     device_id = f"{device.get('ID_VENDOR_ID')}:{device.get('ID_MODEL_ID')}"
     print(f"Detected device with ID: {device_id}")
-
     try:
         result = subprocess.run(['lsusb', '-v', '-d', device_id], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
         if result.returncode == 0 and "Mass Storage" in result.stdout.decode():
             print("Device is a USB Mass Storage device.")
-            return result.stdout.decode()
-        else:
-            print("Device is not a USB Mass Storage device.")
-            return None
+            return {"type": "deviceInfo", "lsusb_output": result.stdout.decode()}
     except Exception as e:
-        print(f"An error occurred while running lsusb: {e}")
-        return None
+        print(f"Error accessing device info: {e}")
+    return None
 
 
 def get_block_device_from_device_node(device_node):
     """Find and return the block device associated with the given USB device node."""
     context = pyudev.Context()
-
     try:
         device = pyudev.Devices.from_device_file(context, device_node)
         print(f"Looking for block device related to: {device_node}")
-
-        for _ in range(10):  # Retry for up to 5 seconds
+        for _ in range(10):
             for dev in context.list_devices(subsystem='block'):
                 if device in dev.ancestors:
                     print(f"Found block device: {dev.device_node}")
                     return dev.device_node
-            time.sleep(0.5)  # Wait 500ms before retrying
+            time.sleep(0.5)
     except Exception as e:
         print(f"Error finding block device: {e}")
-
-    print("No block device found for this USB device.")
+    print("No block device found.")
     return None
 
 
 def mount_usb_device(device_node):
-    """Mount the USB device and return the mount point."""
-    mount_point = "/mnt/usb"
-    os.makedirs(mount_point, exist_ok=True)
-
+    """Mount the USB device."""
+    os.makedirs(MOUNT_POINT, exist_ok=True)
     try:
         block_device = get_block_device_from_device_node(device_node)
         if not block_device:
@@ -65,192 +64,138 @@ def mount_usb_device(device_node):
             if part.startswith(os.path.basename(block_device)) and part != os.path.basename(block_device):
                 partition = f"/dev/{part}"
                 break
-
         partition = partition or block_device
-        print(f"Using device: {partition}")
 
-        subprocess.run(["sudo", "mount", partition, mount_point], check=True)
-        print(f"Mounted {partition} at {mount_point}")
-        return mount_point
+        subprocess.run(["sudo", "mount", partition, MOUNT_POINT], check=True)
+        print(f"Mounted {partition} at {MOUNT_POINT}")
+        return MOUNT_POINT
     except subprocess.CalledProcessError as e:
         print(f"Failed to mount device: {e}")
         return None
 
 
 def gather_files(mount_point):
-    """Gather all files in the mounted directory."""
-    file_list = []
-    for root, _, files in os.walk(mount_point):
-        for file in files:
-            file_path = os.path.join(root, file)
-            file_list.append(file_path)
-    # Commented out to reduce terminal output
-    # print(f"Files gathered: {file_list}")
-    return file_list
+    """Collect all files in the mounted directory."""
+    files = []
+    for root, _, filenames in os.walk(mount_point):
+        for filename in filenames:
+            files.append(os.path.join(root, filename))
+    return files
 
 
-
-def create_ssh_client(server_ip, port, username, key_file_path):
-    """Create and return an SSH client."""
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
+def transfer_files(file_list):
+    """Transfer files to the remote server via SCP."""
     try:
-        ssh.connect(server_ip, port=port, username=username, key_filename=key_file_path, timeout=10)
-        print(f"Connected to {server_ip} via SSH.")
-        return ssh
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(SERVER_IP, port=SSH_PORT, username=SSH_USERNAME, key_filename=KEY_FILE_PATH)
+        print(f"Connected to {SERVER_IP} via SSH.")
+        with SCPClient(ssh.get_transport()) as scp:
+            for file in file_list:
+                scp.put(file, REMOTE_DIR)
+                print(f"Transferred {file} to {REMOTE_DIR}")
+        ssh.close()
     except Exception as e:
-        print(f"Failed to connect to {server_ip}: {e}")
-        return None
+        print(f"Error transferring files: {e}")
 
 
-def send_files_via_scp(local_dir, remote_dir, ssh_client):
-    """Send all files in the local directory to the remote directory via SCP."""
+def unmount_device(mount_point):
+    """Unmount the USB device."""
     try:
-        with SCPClient(ssh_client.get_transport()) as scp:
-            for root, _, files in os.walk(local_dir):
-                for file in files:
-                    local_path = os.path.join(root, file)
-                    # Commented out to reduce terminal output
-                    # print(f"Transferring file via SCP: {local_path} -> {remote_dir}")
-                    scp.put(local_path, remote_dir)
-                    # print(f"Transferred {local_path} successfully.")
-    except Exception as e:
-        print(f"Error transferring files via SCP: {e}")
+        subprocess.run(["sudo", "umount", mount_point], check=True)
+        print(f"Unmounted {mount_point}")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to unmount {mount_point}: {e}")
 
 
-
-async def connect_to_backend(lsusb_output, file_list):
-    """Connect to the backend server via WebSocket, send metadata, and maintain the connection."""
-    uri = "ws://130.225.37.50:3000"  # Backend WebSocket server
-    headers = {"x-device-type": "Pi"}  # Required custom headers
-
-    try:
-        async with websockets.connect(uri, extra_headers=headers) as websocket:
-            print("Connected to backend with headers:", headers)
-
-            # Function to send periodic status updates
-            async def send_status_updates():
-                while True:
-                    try:
-                        status_update = {"type": "status", "status": "active"}
-                        await websocket.send(json.dumps(status_update))
-                        print("Sent status update to backend")
-                        await asyncio.sleep(30)  # Every 30 seconds
-                    except websockets.exceptions.ConnectionClosed:
-                        print("WebSocket connection closed. Stopping status updates.")
-                        break
-
-            # Start sending status updates
-            asyncio.create_task(send_status_updates())
-
-            # Prepare and send metadata
-            data = {
-                "type": "deviceInfo",
-                "deviceInfo": {
-                    "lsusb_output": lsusb_output,
-                    "files": file_list
-                }
-            }
-            payload = json.dumps(data)
-            print(f"Sending metadata to backend: {payload}")
-            await websocket.send(payload)
-
-            # Handle backend responses
-            while True:
-                try:
-                    response = await websocket.recv()
-                    print(f"Backend response: {response}")
-
-                    # Handle specific backend actions
-                    try:
-                        response_data = json.loads(response)
-                        if response_data.get("action") == "block":
-                            print("Backend issued a block command.")
-                            # Implement block logic here if needed
-                        elif response_data.get("action") == "allow":
-                            print("Backend issued an allow command.")
-                            # Implement allow logic here if needed
-                        else:
-                            print(f"Unexpected action from backend: {response_data}")
-                    except json.JSONDecodeError:
-                        print("Received malformed JSON from backend.")
-                except websockets.exceptions.ConnectionClosed:
-                    print("WebSocket connection closed by backend.")
-                    break
-    except Exception as e:
-        print(f"WebSocket connection failed: {e}")
-
-
-
-
-
-
-def monitor_usb_devices():
-    """Monitor USB devices, transfer files with SCP, and notify backend."""
+async def monitor_usb_devices(websocket):
+    """Monitor USB devices asynchronously and send info to the backend."""
     context = pyudev.Context()
     monitor = pyudev.Monitor.from_netlink(context)
     monitor.filter_by('usb')
 
-    server_ip = "130.225.37.50"
-    port = 22
-    username = "ubuntu"
-    key_file_path = "/home/guest/hardwall_device/cloud.key"
-    remote_dir = "/home/ubuntu/box"
-
     print("Monitoring USB devices...")
 
-    for device in iter(monitor.poll, None):
-        if device.action == 'add' and 'DEVNAME' in device:
-            device_node = device.device_node
-            print(f"Device added: {device_node}")
+    def sync_monitor():
+        """Synchronous USB monitoring to be run in a separate thread."""
+        for device in iter(monitor.poll, None):
+            if device.action == 'add' and 'DEVNAME' in device:
+                return device  # Return the device when added
 
-            # Get USB metadata
-            lsusb_output = get_device_info(device)
-            if not lsusb_output:
-                continue
+    while True:
+        # Run the blocking monitor in a thread and await the result
+        device = await asyncio.to_thread(sync_monitor)
+        if not device:
+            continue  # Skip if no device is found
 
-            # Mount the device
-            mount_point = mount_usb_device(device_node)
-            if not mount_point:
-                continue
+        print(f"Device added: {device.device_node}")
+        device_info = get_device_info(device)
+        if not device_info:
+            continue
 
-            # Gather files
-            file_list = gather_files(mount_point)
+        # Send device info to backend
+        try:
+            await websocket.send(json.dumps(device_info))
+            print(f"Sent device info to backend: {device_info}")
+        except websockets.exceptions.ConnectionClosed:
+            print("WebSocket connection closed. Cannot send device info.")
+            break
 
-            # Transfer files via SCP
-            ssh_client = create_ssh_client(server_ip, port, username, key_file_path)
-            if ssh_client:
-                try:
-                    send_files_via_scp(mount_point, remote_dir, ssh_client)
-                finally:
-                    ssh_client.close()
-                    try:
-                        subprocess.run(["sudo", "umount", mount_point], check=True)
-                        print(f"Unmounted {mount_point}")
-                    except subprocess.CalledProcessError as e:
-                        print(f"Failed to unmount {mount_point}: {e}")
+        mount_point = mount_usb_device(device.device_node)
+        if not mount_point:
+            continue
 
-            # Send metadata via WebSocket
-            response = asyncio.run(connect_to_backend(lsusb_output, file_list))
-
-            # Handle backend response
-            if response:
-                action = response.get("action")
-                if action == "block":
-                    print("Backend blocked the device. Unmounting...")
-
-                elif action == "allow":
-                    print("Backend allowed the device.")
-                else:
-                    print(f"Unexpected backend action: {action}. Assuming block.")
-
-            else:
-                print("No valid response from backend. Assuming block.")
+        file_list = gather_files(mount_point)
+        transfer_files(file_list)
+        unmount_device(mount_point)
 
 
+async def reconnect():
+    """Handle reconnection to the backend."""
+    while True:
+        try:
+            async with websockets.connect(BACKEND_URI, extra_headers=HEADERS) as websocket:
+                print("Connected to backend.")
+
+                # Coroutine to handle backend messages
+                async def handle_backend_commands():
+                    """Handle backend commands and confirm the USB state."""
+                    while True:
+                        try:
+                            message = await websocket.recv()
+                            print(f"Received message from backend: {message}")
+                            command = json.loads(message)
+
+                            if command.get("action") == "block":
+                                print("Received block command from backend.")
+                                # Implement block logic here
+                                status_update = {"type": "usbStatus", "status": "blocked"}
+                                await websocket.send(json.dumps(status_update))
+
+                            elif command.get("action") == "allow":
+                                print("Received allow command from backend.")
+                                # Implement allow logic here
+                                status_update = {"type": "usbStatus", "status": "allowed"}
+                                await websocket.send(json.dumps(status_update))
+                        except websockets.exceptions.ConnectionClosed:
+                            print("Backend connection closed during command handling.")
+                            raise  # Trigger reconnection
+                        except json.JSONDecodeError:
+                            print("Received invalid JSON from backend.")
+
+                # Run USB monitoring and backend commands concurrently
+                await asyncio.gather(
+                    handle_backend_commands(),
+                    monitor_usb_devices(websocket)
+                )
+        except (websockets.exceptions.ConnectionClosed, ConnectionRefusedError) as e:
+            print(f"Connection to backend lost: {e}. Retrying in 5 seconds...")
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"Unexpected error during reconnection: {e}. Retrying in 5 seconds...")
+            await asyncio.sleep(5)
 
 
 if __name__ == "__main__":
-    monitor_usb_devices()
+    asyncio.run(reconnect())
 
