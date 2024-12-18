@@ -6,8 +6,6 @@ import json
 import asyncio
 
 
-#Not used????
-
 class Utilities:
     """Provides utility functions for subprocess handling and logging."""
 
