@@ -31,7 +31,7 @@ class DeviceActions:
         try:
             print("Starting USBProxy...")
             command = [
-                "sudo", "./usb-proxy",
+                "sudo", "../usb-proxy/usb-proxy",
                 "--device", "fe980000.usb",
                 "--driver", "fe980000.usb",
                 "--vendor_id", vendor_id,
@@ -43,7 +43,14 @@ class DeviceActions:
             print(f"USBProxy started with PID: {process.pid}")
 
             if "usbhid" in drivers:
-                log_file_path = 'usb_log.json'
+                log_file_path = '../usb-proxy/usb_log.json'
+                # Clear the log file before processing
+                try:
+                    with open(log_file_path, 'w') as log_file:
+                        log_file.truncate(0)
+                    print(f"Cleared log file: {log_file_path}")
+                except Exception as e:
+                    print(f"Error clearing log file: {e}")
                 loop = asyncio.get_running_loop()
                 log_processor_thread = threading.Thread(
                     target=DeviceActions.process_usb_log,
