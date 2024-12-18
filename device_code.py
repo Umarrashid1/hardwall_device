@@ -13,7 +13,6 @@ from WebSocketClient import WebSocketClient, receive_backend_commands
 from usb_device import USBDevice, USBEvent
 
 BACKEND_URI = "ws://130.225.37.50:3000"
-HEADERS = {"x-device-type": "Pi"}
 MOUNT_POINT = "/mnt/usb"
 SERVER_IP = "130.225.37.50"
 SSH_PORT = 22

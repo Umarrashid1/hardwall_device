@@ -2,6 +2,8 @@ import asyncio
 import websockets
 import json
 
+HEADERS = {"x-device-type": "Pi"}
+
 class WebSocketClient:
     """Manages a WebSocket connection to a server with reconnection logic."""
     def __init__(self, server_url):
