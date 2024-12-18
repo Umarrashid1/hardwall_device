@@ -43,7 +43,7 @@ class DeviceActions:
             print(f"USBProxy started with PID: {process.pid}")
 
             if "usbhid" in drivers:
-                log_file_path = '.usb_log.json'
+                log_file_path = './usb_log.json'
                 # Clear the log file before processing
                 try:
                     with open(log_file_path, 'w') as log_file:
