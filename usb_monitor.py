@@ -95,7 +95,7 @@ class USBMonitor:
                 driver = properties.get("DRIVER")
                 if driver:
                     device.add_driver(driver)
-                    asyncio.run(self.handle_new_driver_bind(device, self.state_manager))
+                    asyncio.run(self.handle_new_driver_bind(device, driver, self.state_manager))
                 return
 
         if devpath in self.devices:
@@ -106,11 +106,11 @@ class USBMonitor:
         else:
             print(f"Warning: Event for unknown device at {devpath}")
 
-    async def handle_new_driver_bind(self, device, state_manager):
+    async def handle_new_driver_bind(self, device, new_driver, state_manager):
         """Handle the binding of a new driver after the device is already allowed."""
         if self.ws_client and device:
             print(f"Handling new driver binding for device: {device.devpath}")
-            if device.drivers and state_manager.status == "allow":
+            if state_manager.status == "allow" and new_driver not in device.drivers:
                 # Switch to block and notify the backend
                 print("Switching to 'block' due to new driver binding.")
                 await state_manager.set_status("block", ws_client=self.ws_client)
