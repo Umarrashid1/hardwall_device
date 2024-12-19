@@ -20,7 +20,7 @@ async def main():
     await ws_client.connect(state_manager)
 
     # Initialize USB monitor
-    monitor = USBMonitor(ws_client)
+    monitor = USBMonitor(ws_client, state_manager)
 
     # Start WebSocket command receiver and USB monitor tasks
     command_receiver_task = asyncio.create_task(receive_backend_commands(ws_client, state_manager))

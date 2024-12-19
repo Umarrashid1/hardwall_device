@@ -10,7 +10,7 @@ import pyudev
 
 class USBMonitor:
     """Monitors USB events and manages devices."""
-    def __init__(self, ws_client):
+    def __init__(self, ws_client, state_manager):
         self.devices = {}  # Store devices by their devpath
         self.devices_lock = threading.Lock()  # Add a lock for thread safety
         self.stop_event = Event()  # Use an Event object to manage stopping
@@ -18,6 +18,7 @@ class USBMonitor:
         self.first_device_connected = False  # Track if the first device has connected
 
         self.ws_client = ws_client  # WebSocket client instance
+        self.state_manager = state_manager #Statemanager instance
 
     def reset_event_timer(self):
         self.last_event_time = time.time()
@@ -25,8 +26,8 @@ class USBMonitor:
     def send_device_info(self):
         """Send all device information to the backend."""
         for device in self.devices.values():
-            if "usb-storage" in device.drivers:
-                DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
+            #if "usb-storage" in device.drivers:
+                #DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
             print(device.get_device_info())
             asyncio.run(self.ws_client.send_message({
                 "type": "device_summary",
@@ -94,7 +95,7 @@ class USBMonitor:
                 driver = properties.get("DRIVER")
                 if driver:
                     device.add_driver(driver)
-                    asyncio.run(self.handle_new_driver_bind(device, driver))
+                    asyncio.run(self.handle_new_driver_bind(device, self.state_manager))
                 return
 
         if devpath in self.devices:
@@ -139,6 +140,6 @@ class USBMonitor:
                 devpath = device.get("DEVPATH", "Unknown")
                 properties = dict(device.items())
 
-                self.add_event(action, devtype, devpath, properties)
+                self.add_event(action, devtype, devpath, properties, state_manager)
         except Exception as e:
             print(f"Error during monitoring: {e}")
