@@ -93,7 +93,6 @@ class USBMonitor:
                 #Store driver properties in array
                 driver = properties.get("DRIVER")
                 if driver:
-                    device.add_driver(driver)
                     asyncio.run(self.handle_new_driver_bind(device, driver, self.state_manager))
                 return
 
@@ -107,20 +106,27 @@ class USBMonitor:
 
     async def handle_new_driver_bind(self, device, new_driver, state_manager):
         """Handle the binding of a new driver after the device is already allowed."""
-        if self.ws_client and device:
-            print(f"Handling new driver binding for device: {device.devpath}")
-            if state_manager.status == "allow" and new_driver not in device.drivers:
-                # Switch to block and notify the backend
+        if new_driver not in device.drivers:
+            # Add the new driver to the device
+            device.add_driver(new_driver)
+
+            # Log the addition of the new driver
+            print(f"New driver added: {new_driver} for device {device.devpath}")
+
+            # Always send the updated device summary if a new driver is added
+            print("Sending updated device summary to backend due to new driver binding...")
+            await self.ws_client.send_message({
+                "type": "device_summary",
+                "device_info": device.get_device_info(),
+                "event_history": device.get_event_history(),
+            })
+
+            # If the state is "allow", switch to "block"
+            if state_manager.status == "allow":
                 print("Switching to 'block' due to new driver binding.")
                 await state_manager.set_status("block", ws_client=self.ws_client)
-                # Wait for additional events
-                await asyncio.sleep(5)
-                print("Sending updated device summary to backend...")
-                await self.ws_client.send_message({
-                    "type": "device_summary",
-                    "device_info": device.get_device_info(),
-                    "event_history": device.get_event_history(),
-                })
+
+
 
     def monitor_events(self):
         context = pyudev.Context()
