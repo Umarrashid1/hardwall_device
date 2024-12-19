@@ -140,6 +140,6 @@ class USBMonitor:
                 devpath = device.get("DEVPATH", "Unknown")
                 properties = dict(device.items())
 
-                self.add_event(action, devtype, devpath, properties, state_manager)
+                self.add_event(action, devtype, devpath, properties)
         except Exception as e:
             print(f"Error during monitoring: {e}")
