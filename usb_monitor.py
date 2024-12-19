@@ -26,6 +26,7 @@ class USBMonitor:
     def send_device_info(self):
         """Send all device information to the backend."""
         for device in self.devices.values():
+
             #if "usb-storage" in device.drivers:
                 #DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
             print(device.get_device_info())
@@ -51,9 +52,7 @@ class USBMonitor:
                     print("No new events for 5 seconds. Sending device info...")
                     self.send_device_info()
                     already_sent = True  # Mark as sent
-            else:
-                already_sent = False  # Reset if activity resumes
-            time.sleep(1)  # Check every second
+
 
     def add_device(self, devtype, devpath, properties):
         """Add a new USB device."""
