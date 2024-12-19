@@ -50,6 +50,8 @@ async def test_set_status_allow_to_block():
         assert state_manager.status == "block"
         assert state_manager.proxy_process is None
         mock_ws_client.send_message.assert_called_with({"type": "status", "data": "block"})
+
+        # Correctly match the call to `stop_usbproxy`
         mock_stop.assert_called_once_with(state_manager.proxy_process)
 
 @pytest.mark.asyncio

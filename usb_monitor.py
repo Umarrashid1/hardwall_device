@@ -20,11 +20,10 @@ class USBMonitor:
         self.ws_client = ws_client  # WebSocket client instance
 
     def reset_event_timer(self):
-        """Reset the event timer to the current time."""
         self.last_event_time = time.time()
 
     def send_device_info(self):
-        """Send all device information to the WebSocket server."""
+        """Send all device information to the backend."""
         for device in self.devices.values():
             if "usb-storage" in device.drivers:
                 DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
@@ -67,14 +66,17 @@ class USBMonitor:
                 self.reset_event_timer()
 
     def add_event(self, action, devtype, devpath, properties):
-        """Process a USB event."""
-        self.reset_event_timer()  # Reset the inactivity timer
-        # Ensure the event is valid
+        #Process a USB event.
+        self.reset_event_timer()
+        # Filter out events caused by USBProxy
+        if action in ["unbind", "remove"] and "usb-storage" in properties.get("DRIVER", ""):
+            print(f"Ignoring USBProxy-related event: {action} for {devpath}")
+            return
+
+        """Add a new USB device."""
         if devtype not in ["usb_device", "usb_interface"]:
             print(f"Ignoring non-USB event: {devtype}")
             return
-
-        # Handle "add" action for devices
         if action == "add" and devtype == "usb_device":
             if devpath not in self.devices:
                 self.add_device(devtype, devpath, properties)
@@ -87,13 +89,13 @@ class USBMonitor:
                 device = self.devices[parent_path]
                 event = USBEvent(action, device, devtype, properties)
                 device.add_event(event)
+                #Store driver properties in array
                 driver = properties.get("DRIVER")
                 if driver:
                     device.add_driver(driver)
-                #print(json.dumps(event.get_summary(), indent=4))
+                    asyncio.run(self.handle_new_driver_bind(device, driver))
                 return
 
-        # Handle other events or log warnings
         if devpath in self.devices:
             device = self.devices[devpath]
             event = USBEvent(action, device, devtype, properties)
@@ -102,12 +104,27 @@ class USBMonitor:
         else:
             print(f"Warning: Event for unknown device at {devpath}")
 
-    def handle_user_input(self):
-        """placeholder for interoupt to block/allow from cloud."""
+    async def handle_new_driver_bind(self, device, driver):
+        """Handle a new driver bind event after the device is allowed."""
+        if self.ws_client and self.ws_client.state_manager.status == "allow":
+            print(f"New driver '{driver}' bound to device {device.get_device_info()}. Switching to 'block' state.")
 
+            # Change status to block
+            await self.ws_client.state_manager.set_status("block", ws_client=self.ws_client)
+
+            # Wait 5 seconds for more events
+            print("Waiting 5 seconds for additional events...")
+            await asyncio.sleep(5)
+
+            # Send updated device summary to the backend
+            await self.ws_client.send_message({
+                "type": "device_summary",
+                "device_info": device.get_device_info(),
+                "event_history": device.get_event_history()
+            })
+            print("Updated device summary sent to backend.")
 
     def monitor_events(self):
-        """Start monitoring USB events."""
         context = pyudev.Context()
         monitor = pyudev.Monitor.from_netlink(context)
         monitor.filter_by('usb')
