@@ -69,6 +69,7 @@ class USBMonitor:
         #Process a USB event.
         self.reset_event_timer()
         # Filter out events caused by USBProxy
+
         if action in ["unbind", "remove"] and "usb-storage" in properties.get("DRIVER", ""):
             print(f"Ignoring USBProxy-related event: {action} for {devpath}")
             return
@@ -104,25 +105,22 @@ class USBMonitor:
         else:
             print(f"Warning: Event for unknown device at {devpath}")
 
-    async def handle_new_driver_bind(self, device, driver):
-        """Handle a new driver bind event after the device is allowed."""
-        if self.ws_client and self.ws_client.state_manager.status == "allow":
-            print(f"New driver '{driver}' bound to device {device.get_device_info()}. Switching to 'block' state.")
-
-            # Change status to block
-            await self.ws_client.state_manager.set_status("block", ws_client=self.ws_client)
-
-            # Wait 5 seconds for more events
-            print("Waiting 5 seconds for additional events...")
-            await asyncio.sleep(5)
-
-            # Send updated device summary to the backend
-            await self.ws_client.send_message({
-                "type": "device_summary",
-                "device_info": device.get_device_info(),
-                "event_history": device.get_event_history()
-            })
-            print("Updated device summary sent to backend.")
+    async def handle_new_driver_bind(self, device, state_manager):
+        """Handle the binding of a new driver after the device is already allowed."""
+        if self.ws_client and device:
+            print(f"Handling new driver binding for device: {device.devpath}")
+            if device.drivers and state_manager.status == "allow":
+                # Switch to block and notify the backend
+                print("Switching to 'block' due to new driver binding.")
+                await state_manager.set_status("block", ws_client=self.ws_client)
+                # Wait for additional events
+                await asyncio.sleep(5)
+                print("Sending updated device summary to backend...")
+                await self.ws_client.send_message({
+                    "type": "device_summary",
+                    "device_info": device.get_device_info(),
+                    "event_history": device.get_event_history(),
+                })
 
     def monitor_events(self):
         context = pyudev.Context()
