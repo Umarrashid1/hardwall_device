@@ -15,15 +15,7 @@ class DeviceActions:
     usb_log_stop_event = Event()  # Static Event shared across threads
 
     @staticmethod
-    def unbind_device(devpath):
-        """Unbind the specified device."""
-        try:
-            print(f"Unbinding device at {devpath}...")
-            unbind_command = f"echo '{devpath}' | sudo tee /sys/bus/usb/drivers/hub/unbind"
-            result = subprocess.run(unbind_command, shell=True, check=True, text=True)
-            print(f"Device unbound successfully: {result.stdout}")
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to unbind device: {e.stderr}")
+
 
     @staticmethod
     def start_usbproxy(vendor_id, product_id, drivers, ws_client):
@@ -31,7 +23,7 @@ class DeviceActions:
         try:
             print("Starting USBProxy...")
             command = [
-                "sudo", "./usb-proxy/usb-proxy",
+                "./usb-proxy/usb-proxy",
                 "--device", "fe980000.usb",
                 "--driver", "fe980000.usb",
                 "--vendor_id", vendor_id,
@@ -117,7 +109,7 @@ class DeviceActions:
 
             # Try to mount the partition
             try:
-                subprocess.run(["sudo", "mount", partition, mount_point], check=True, text=True)
+                subprocess.run(["mount", partition, mount_point], check=True, text=True)
             except subprocess.CalledProcessError as e:
                 print(f"Error mounting {partition} to {mount_point}: {e}")
                 return
@@ -151,7 +143,7 @@ class DeviceActions:
     def unmount_device(mount_point):
         """Unmount the USB storage device."""
         try:
-            subprocess.run(["sudo", "umount", mount_point], check=True, text=True)
+            subprocess.run(["umount", mount_point], check=True, text=True)
         except subprocess.CalledProcessError as e:
             print(f"Failed to unmount device: {e}")
 
