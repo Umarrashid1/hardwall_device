@@ -2,14 +2,14 @@ import threading
 from threading import Event
 from usb_device import USBDevice, USBEvent
 import time
-from device_actions import DeviceActions
 import asyncio
 import json
 import pyudev
+from device_actions import DeviceActions
 
 
 class USBMonitor:
-    """Monitors USB events and manages devices."""
+    #Monitors USB events and manages devices.
     def __init__(self, ws_client, state_manager):
         self.devices = {}  # Store devices by their devpath
         self.devices_lock = threading.Lock()  # Add a lock for thread safety
@@ -27,8 +27,8 @@ class USBMonitor:
         """Send all device information to the backend."""
         for device in self.devices.values():
 
-            #if "usb-storage" in device.drivers:
-                #DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
+            if "usb-storage" in device.drivers:
+                DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
             print(device.get_device_info())
             asyncio.run(self.ws_client.send_message({
                 "type": "device_summary",
@@ -132,9 +132,7 @@ class USBMonitor:
         context = pyudev.Context()
         monitor = pyudev.Monitor.from_netlink(context)
         monitor.filter_by('usb')
-
-
-        print("Monitoring USB events... Press Enter to stop.")
+        print("Monitoring USB events...")
         try:
             while not self.stop_event.is_set():  # Continue until stop_event is set
                 device = monitor.poll(timeout=1)  # Timeout allows stop_event to be checked

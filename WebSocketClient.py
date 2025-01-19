@@ -19,8 +19,8 @@ class WebSocketClient:
             while not self.ws:
                 try:
                     print(f"Connecting to WebSocket server at {self.server_url}...")
-                    self.ws = await asyncio.wait_for(
-                        websockets.connect(self.server_url, extra_headers=HEADERS), timeout=10
+                    self.ws = await websockets.connect(
+                        self.server_url, extra_headers=HEADERS, timeout=10
                     )
                     print("Connected to WebSocket server.")
                     if state_manager:

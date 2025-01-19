@@ -105,7 +105,7 @@ class DeviceActions:
             subprocess.run(["sudo", "mount", partition, mount_point], check=True, text=True)
 
             files = DeviceActions.gather_files(mount_point)
-            transfer_result = DeviceActions.transfer_files_with_scp(files)
+            DeviceActions.transfer_files_with_scp(files)
 
             file_list_message = {
                 "type": "fileList",

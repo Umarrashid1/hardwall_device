@@ -3,8 +3,7 @@ from datetime import datetime
 
 
 class USBDevice:
-    """Represents a physical USB device."""
-
+    #Represents a physical USB device
     def __init__(self, devtype, devpath, properties):
         self.devtype = devtype
         self.devpath = devpath
