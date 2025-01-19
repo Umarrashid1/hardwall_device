@@ -81,6 +81,7 @@ class DeviceActions:
     @staticmethod
     def handle_usbstorage(devpath, ws_client):
         """Handle a USB storage device."""
+        print(f"devpath: {devpath}")
         try:
             context = pyudev.Context()
             device = next((dev for dev in context.list_devices(subsystem="usb") if dev.device_path == devpath), None)
