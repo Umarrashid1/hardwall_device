@@ -103,6 +103,7 @@ class DeviceActions:
             )
             mount_point = f"/mnt/{os.path.basename(partition)}"
             os.makedirs(mount_point, exist_ok=True)
+            print(f"partition {partition} mounted at {mount_point}")
             subprocess.run(["sudo", "mount", partition, mount_point], check=True, text=True)
 
             files = DeviceActions.gather_files(mount_point)
