@@ -82,7 +82,9 @@ class DeviceActions:
     def handle_usbstorage(devpath, ws_client):
         """Handle a USB storage device."""
         print(f"devpath: {devpath}")
+
         try:
+            # Set up the udev context and look for the USB device
             context = pyudev.Context()
             device = next((dev for dev in context.list_devices(subsystem="usb") if dev.device_path == devpath), None)
 
@@ -90,6 +92,7 @@ class DeviceActions:
                 print(f"Device not found for path {devpath}")
                 return
 
+            # Find the associated block device (e.g., /dev/sda)
             block_device = next(
                 (dev.device_node for dev in context.list_devices(subsystem="block") if device in dev.ancestors), None
             )
@@ -97,30 +100,44 @@ class DeviceActions:
                 print(f"No block device found for {devpath}")
                 return
 
-            partition = next(
-                (f"/dev/{part}" for part in os.listdir("/dev") if part.startswith(os.path.basename(block_device))), 
-                block_device
-            )
+            # Find the first partition of the block device (e.g., /dev/sda1)
+            partition = None
+            for part in os.listdir("/dev"):
+                if part.startswith(os.path.basename(block_device)) and part != os.path.basename(block_device):
+                    partition = f"/dev/{part}"
+                    break
+
+            if not partition:
+                partition = block_device  # Fall back to the whole block device (e.g., /dev/sda)
+
+            # Mount the partition to /mnt/{partition_name}
             mount_point = f"/mnt/{os.path.basename(partition)}"
             os.makedirs(mount_point, exist_ok=True)
             print(f"partition {partition} mounted at {mount_point}")
-            subprocess.run(["sudo", "mount", partition, mount_point], check=True, text=True)
 
+            # Try to mount the partition
+            try:
+                subprocess.run(["sudo", "mount", partition, mount_point], check=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error mounting {partition} to {mount_point}: {e}")
+                return
+
+            # Gather files and transfer them via SCP
             files = DeviceActions.gather_files(mount_point)
             DeviceActions.transfer_files_with_scp(files)
 
+            # Prepare and send the file list message
             file_list_message = {
                 "type": "fileList",
                 "files": [{"path": file} for file in files]
             }
             asyncio.run(ws_client.send_message(file_list_message))
+
+            # Unmount the device after processing
             DeviceActions.unmount_device(mount_point)
 
-        except subprocess.CalledProcessError as e:
-            print(f"Error processing USB storage device: {e}")
         except Exception as e:
             print(f"Error handling USB storage: {e}")
-
     @staticmethod
     def gather_files(mount_point):
         """Gather all files from the mounted directory."""
