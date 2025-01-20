@@ -91,8 +91,8 @@ class USBMonitor:
                 device.add_event(event)
                 #Store driver properties in array
                 driver = properties.get("DRIVER")
-                if driver:
-                    asyncio.run(self.handle_new_driver_bind(device, driver, self.state_manager))
+                #if driver:
+                #    asyncio.run(self.handle_new_driver_bind(device, driver, self.state_manager))
                 return
 
         if devpath in self.devices:
