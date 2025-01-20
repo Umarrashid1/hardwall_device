@@ -1,6 +1,7 @@
 import threading
 from threading import Event
 from usb_device import USBDevice, USBEvent
+from device_actions import DeviceActions
 import time
 import asyncio
 import json
@@ -26,8 +27,8 @@ class USBMonitor:
         """Send all device information to the backend."""
         for device in self.devices.values():
 
-            #if "usb-storage" in device.drivers:
-                #DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
+            if "usb-storage" in device.drivers:
+                DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
             print(device.get_device_info())
             asyncio.run(self.ws_client.send_message({
                 "type": "device_summary",
@@ -94,11 +95,6 @@ class USBMonitor:
                 driver = properties.get("DRIVER")
                 #if driver:
                 #    asyncio.run(self.handle_new_driver_bind(device, driver, self.state_manager))
-                asyncio.run(self.ws_client.send_message({
-                    "type": "device_summary",
-                    "device_info": device.get_device_info(),
-                    "event_history": device.get_event_history(),
-                }))
                 return
 
         if devpath in self.devices:
