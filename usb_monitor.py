@@ -37,20 +37,10 @@ class USBMonitor:
 
     def monitor_inactivity(self):
         """Check for inactivity and send device info if no events occur for 5 seconds."""
-        already_sent = False  # Track if the info has been sent
-
-        while not self.stop_event.is_set():
-            if not self.first_device_connected or self.last_event_time is None:
-                # Skip if no device has connected yet
-                time.sleep(1)
-                continue
-
-            current_time = time.time()
-            if current_time - self.last_event_time >= 5:
-                if not already_sent:  # Only send if it hasn't been sent already
-                    print("No new events for 5 seconds. Sending device info...")
-                    self.send_device_info()
-
+        while True:
+            time.sleep(5)
+            print("No new events for 5 seconds. Sending device info...")
+            self.send_device_info()
 
     def add_device(self, devtype, devpath, properties):
         """Add a new USB device."""
