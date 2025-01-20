@@ -57,7 +57,6 @@ class USBMonitor:
     def add_device(self, devtype, devpath, properties):
         """Add a new USB device."""
         if devpath not in self.devices:
-            self.devices.clear()
             self.devices[devpath] = USBDevice(devtype, devpath, properties)
             print(f"Device added: {self.devices[devpath].get_device_info()}")
 
@@ -114,7 +113,7 @@ class USBMonitor:
             # Log the addition of the new driver
             print(f"New driver added: {new_driver} for device {device.devpath}")
 
-            if "usb-storage" == new_driver:
+            if "usb-storage" in device.drivers:
                 DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
                 print("Sending updated device summary to backend due to new driver binding...")
 
@@ -149,4 +148,3 @@ class USBMonitor:
                 self.add_event(action, devtype, devpath, properties)
         except Exception as e:
             print(f"Error during monitoring: {e}")
-        print("Monitoring stopped...")
