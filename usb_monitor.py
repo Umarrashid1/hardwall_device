@@ -26,7 +26,6 @@ class USBMonitor:
     def send_device_info(self):
         """Send all device information to the backend."""
         for device in self.devices.values():
-
             if "usb-storage" in device.drivers:
                 DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
             print(device.get_device_info())
@@ -144,7 +143,7 @@ class USBMonitor:
                 devtype = device.get("DEVTYPE", "Unknown")
                 devpath = device.get("DEVPATH", "Unknown")
                 properties = dict(device.items())
-
                 self.add_event(action, devtype, devpath, properties)
         except Exception as e:
             print(f"Error during monitoring: {e}")
+        print("monitoring stopped")
