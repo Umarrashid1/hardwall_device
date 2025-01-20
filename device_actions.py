@@ -14,14 +14,18 @@ class DeviceActions:
     """Handles device actions like unbinding and starting USB proxy."""
     usb_log_stop_event = Event()  # Static Event shared across threads
 
-    @staticmethod
-
 
     @staticmethod
     def start_usbproxy(vendor_id, product_id, drivers, ws_client):
         """Start USB proxy for the specified device."""
+        process = None  # Initialize process to ensure it's defined
+        log_processor_thread = None  # Initialize thread to ensure it's defined
+        log_file_path = './usb_log.json'
+
         try:
             print("Starting USBProxy...")
+
+            # Build the command to start the USB proxy
             command = [
                 "./usb-proxy/usb-proxy",
                 "--device", "fe980000.usb",
@@ -34,8 +38,8 @@ class DeviceActions:
             DeviceActions.usb_log_stop_event.clear()
             print(f"USBProxy started with PID: {process.pid}")
 
+            # Handle log file and start log processor thread if "usbhid" is in drivers
             if "usbhid" in drivers:
-                log_file_path = './usb_log.json'
                 # Clear the log file before processing
                 try:
                     with open(log_file_path, 'w') as log_file:
@@ -43,32 +47,60 @@ class DeviceActions:
                     print(f"Cleared log file: {log_file_path}")
                 except Exception as e:
                     print(f"Error clearing log file: {e}")
+                    raise  # Re-raise the exception to handle cleanup
+
+                # Start the log processing thread
                 loop = asyncio.get_running_loop()
                 log_processor_thread = threading.Thread(
                     target=DeviceActions.process_usb_log,
-                    args=(log_file_path, 20, ws_client, loop), 
+                    args=(log_file_path, 20, ws_client, loop),
                     daemon=True
                 )
                 log_processor_thread.start()
 
             return process
+
         except Exception as e:
             print(f"Failed to start USBProxy: {str(e)}")
+
+            # Cleanup in case of failure
+            if process and process.poll() is None:
+                process.terminate()
+                process.wait()
+                print("Terminated USBProxy process due to failure.")
+
+            if log_processor_thread and log_processor_thread.is_alive():
+                DeviceActions.usb_log_stop_event.set()
+                log_processor_thread.join(timeout=5)
+                print("Stopped log processor thread due to failure.")
+
             return None
 
     @staticmethod
     def stop_usbproxy(process):
         """Stop the USB proxy process."""
         try:
+            # Stop the USB log processing thread
             DeviceActions.usb_log_stop_event.set()
+
+            # Terminate the process if it is still running
             if process and process.poll() is None:
                 process.terminate()
                 process.wait(timeout=5)
+                print(f"Terminated USBProxy process with PID: {process.pid}")
             elif process:
                 process.kill()
                 process.wait()
+                print(f"Killed USBProxy process with PID: {process.pid}")
+
+        except subprocess.TimeoutExpired:
+            print("Timeout while stopping USBProxy process.")
         except Exception as e:
             print(f"Failed to stop USBProxy: {str(e)}")
+        finally:
+            # Final cleanup logic if necessary
+            DeviceActions.usb_log_stop_event.set()
+            print("Cleanup complete.")
 
     @staticmethod
     def handle_usbstorage(devpath, ws_client):
