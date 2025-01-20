@@ -110,9 +110,13 @@ class USBMonitor:
 
     async def handle_new_driver_bind(self, device, new_driver, state_manager):
         """Handle the binding of a new driver after the device is already allowed."""
+        if "usb-storage" in device.drivers:
+            DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
+
         if new_driver not in device.drivers:
             # Add the new driver to the device
             device.add_driver(new_driver)
+
 
             # Log the addition of the new driver
             print(f"New driver added: {new_driver} for device {device.devpath}")
