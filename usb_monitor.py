@@ -34,6 +34,8 @@ class USBMonitor:
                 "device_info": device.get_device_info(),
                 "event_history": device.get_event_history(),
             }))
+            self.devices.__delitem__(device)
+
 
     def monitor_inactivity(self):
         """Check for inactivity and send device info if no events occur for 5 seconds."""
