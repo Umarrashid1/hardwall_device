@@ -149,3 +149,4 @@ class USBMonitor:
                 self.add_event(action, devtype, devpath, properties)
         except Exception as e:
             print(f"Error during monitoring: {e}")
+        print("Monitoring stopped...")
