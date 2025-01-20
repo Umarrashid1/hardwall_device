@@ -71,6 +71,7 @@ class USBMonitor:
         self.reset_event_timer()
         # Filter out events caused by USBProxy
 
+
         if action in ["unbind", "remove"] and "usb-storage" in properties.get("DRIVER", ""):
             print(f"Ignoring USBProxy-related event: {action} for {devpath}")
             return
@@ -93,6 +94,8 @@ class USBMonitor:
                 device.add_event(event)
                 #Store driver properties in array
                 driver = properties.get("DRIVER")
+                if "usb-storage" in device.drivers:
+                    DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
                 if driver:
                     asyncio.run(self.handle_new_driver_bind(device, driver, self.state_manager))
                 return
@@ -122,8 +125,7 @@ class USBMonitor:
                 "event_history": device.get_event_history(),
             })
 
-            if "usb-storage" in device.drivers:
-                DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
+
 
 
             # If the state is "allow", switch to "block"
