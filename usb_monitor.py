@@ -116,7 +116,15 @@ class USBMonitor:
 
             # Always send the updated device summary if a new driver is added
             print("Sending updated device summary to backend due to new driver binding...")
-            self.send_device_info()
+            await self.ws_client.send_message({
+                "type": "device_summary",
+                "device_info": device.get_device_info(),
+                "event_history": device.get_event_history(),
+            })
+
+            if "usb-storage" in device.drivers:
+                DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
+
 
             # If the state is "allow", switch to "block"
             if state_manager.status == "allow":

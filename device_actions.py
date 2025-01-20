@@ -15,6 +15,7 @@ class DeviceActions:
     usb_log_stop_event = Event()  # Static Event shared across threads
 
 
+
     @staticmethod
     def start_usbproxy(vendor_id, product_id, drivers, ws_client):
         """Start USB proxy for the specified device."""
