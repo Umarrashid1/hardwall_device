@@ -5,11 +5,10 @@ import time
 import asyncio
 import json
 import pyudev
-from device_actions import DeviceActions
 
 
 class USBMonitor:
-    #Monitors USB events and manages devices.
+    """Monitors USB events and manages devices."""
     def __init__(self, ws_client, state_manager):
         self.devices = {}  # Store devices by their devpath
         self.devices_lock = threading.Lock()  # Add a lock for thread safety
@@ -26,28 +25,37 @@ class USBMonitor:
     def send_device_info(self):
         """Send all device information to the backend."""
         for device in self.devices.values():
-            if "usb-storage" in device.drivers:
-                DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
+
+            #if "usb-storage" in device.drivers:
+                #DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
             print(device.get_device_info())
             asyncio.run(self.ws_client.send_message({
                 "type": "device_summary",
                 "device_info": device.get_device_info(),
                 "event_history": device.get_event_history(),
             }))
-            self.devices.__delitem__(device)
-
 
     def monitor_inactivity(self):
         """Check for inactivity and send device info if no events occur for 5 seconds."""
-        while True:
-            time.sleep(5)
-            print("No new events for 5 seconds. Sending device info...")
-            self.send_device_info()
+        already_sent = False  # Track if the info has been sent
+
+        while not self.stop_event.is_set():
+            if not self.first_device_connected or self.last_event_time is None:
+                # Skip if no device has connected yet
+                time.sleep(1)
+                continue
+
+            current_time = time.time()
+            if current_time - self.last_event_time >= 5:
+                if not already_sent:  # Only send if it hasn't been sent already
+                    print("No new events for 5 seconds. Sending device info...")
+                    self.send_device_info()
+                    already_sent = True  # Mark as sent
+
 
     def add_device(self, devtype, devpath, properties):
         """Add a new USB device."""
         if devpath not in self.devices:
-            self.devices.clear()
             self.devices[devpath] = USBDevice(devtype, devpath, properties)
             print(f"Device added: {self.devices[devpath].get_device_info()}")
 
@@ -104,10 +112,8 @@ class USBMonitor:
             # Log the addition of the new driver
             print(f"New driver added: {new_driver} for device {device.devpath}")
 
-            if "usb-storage" in device.drivers:
-                DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
-                print("Sending updated device summary to backend due to new driver binding...")
-
+            # Always send the updated device summary if a new driver is added
+            print("Sending updated device summary to backend due to new driver binding...")
             await self.ws_client.send_message({
                 "type": "device_summary",
                 "device_info": device.get_device_info(),
@@ -125,7 +131,9 @@ class USBMonitor:
         context = pyudev.Context()
         monitor = pyudev.Monitor.from_netlink(context)
         monitor.filter_by('usb')
-        print("Monitoring USB events...")
+
+
+        print("Monitoring USB events... Press Enter to stop.")
         try:
             while not self.stop_event.is_set():  # Continue until stop_event is set
                 device = monitor.poll(timeout=1)  # Timeout allows stop_event to be checked
@@ -135,7 +143,7 @@ class USBMonitor:
                 devtype = device.get("DEVTYPE", "Unknown")
                 devpath = device.get("DEVPATH", "Unknown")
                 properties = dict(device.items())
+
                 self.add_event(action, devtype, devpath, properties)
         except Exception as e:
             print(f"Error during monitoring: {e}")
-        print("monitoring stopped")
