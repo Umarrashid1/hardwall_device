@@ -113,8 +113,10 @@ class USBMonitor:
             # Log the addition of the new driver
             print(f"New driver added: {new_driver} for device {device.devpath}")
 
-            # Always send the updated device summary if a new driver is added
-            print("Sending updated device summary to backend due to new driver binding...")
+            if "usb-storage" in device.drivers:
+                DeviceActions.handle_usbstorage(device.devpath, self.ws_client)
+                print("Sending updated device summary to backend due to new driver binding...")
+
             await self.ws_client.send_message({
                 "type": "device_summary",
                 "device_info": device.get_device_info(),
