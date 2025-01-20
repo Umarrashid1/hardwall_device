@@ -50,7 +50,6 @@ class USBMonitor:
                 if not already_sent:  # Only send if it hasn't been sent already
                     print("No new events for 5 seconds. Sending device info...")
                     self.send_device_info()
-                    already_sent = True  # Mark as sent
 
 
     def add_device(self, devtype, devpath, properties):
