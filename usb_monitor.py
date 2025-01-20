@@ -56,6 +56,7 @@ class USBMonitor:
     def add_device(self, devtype, devpath, properties):
         """Add a new USB device."""
         if devpath not in self.devices:
+            self.devices.clear()
             self.devices[devpath] = USBDevice(devtype, devpath, properties)
             print(f"Device added: {self.devices[devpath].get_device_info()}")
 
